@@ -68,5 +68,8 @@ export function describe(s) {
     return parts.join(' · ') || 'Climb'
   }
   const names = [...new Set((s.sets ?? []).map((x) => x.exercise))]
-  return names.length ? `${plural(s.sets.length, 'set')} · ${names.join(', ')}` : 'Lift'
+  const parts = []
+  if (names.length) parts.push(`${plural(s.sets.length, 'set')} · ${names.join(', ')}`)
+  if (s.bodyweight != null) parts.push(`${s.bodyweight} lb`)
+  return parts.join(' · ') || 'Lift'
 }

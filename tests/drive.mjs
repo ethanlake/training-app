@@ -108,6 +108,13 @@ await page.getByRole('button', { name: 'bench press', exact: true }).click()
 await page.getByRole('spinbutton', { name: 'Per side (lb)' }).fill('70')
 await page.getByRole('spinbutton', { name: 'Reps' }).fill('8')
 await page.getByRole('button', { name: 'Add set' }).click()
+// bodyweight: blank by default, committed on blur, stored on the day
+const bw = page.getByRole('spinbutton', { name: 'Bodyweight (lb)' })
+check('bodyweight box exists', (await bw.count()) === 1)
+check('bodyweight starts blank', (await bw.inputValue()) === '')
+await bw.fill('172')
+await bw.blur()
+await page.waitForTimeout(200)
 await page.locator('textarea').fill('Bar speed good.')
 await page.locator('textarea').blur()
 await page.screenshot({ path: `${SHOTS}/desktop-lift.png` })
@@ -128,6 +135,7 @@ check('per-side entry stored as the true total', lift?.sets[0].weight === 275, S
 check('bench stored as total', lift?.sets[2].weight === 185, String(lift?.sets[2].weight))
 check('set prefill worked', lift?.sets[1].weight === 275 && lift.sets[1].reps === 5)
 check('lift notes persisted', lift?.notes === 'Bar speed good.')
+check('bodyweight persisted as a number', lift?.bodyweight === 172, JSON.stringify(lift?.bodyweight))
 
 // the requested read-out: per side, with the total in parentheses
 await page.getByRole('button', { name: 'Lift', exact: true }).first().click()
@@ -144,15 +152,15 @@ check(
 // a non-barbell lift keeps a plain field and a plain read-out
 await page.getByRole('button', { name: 'pullup', exact: true }).click()
 await page.waitForTimeout(150)
-check('non-barbell field stays plain', (await page.getByRole('spinbutton', { name: 'Weight (lb)' }).count()) === 1)
+check('non-barbell field stays plain', (await page.getByRole('spinbutton', { name: 'Weight (lb)', exact: true }).count()) === 1)
 // an exercise with no history shows empty boxes, not suggested numbers
 check(
   'no placeholder numbers on an unlogged exercise',
-  (await page.getByRole('spinbutton', { name: 'Weight (lb)' }).getAttribute('placeholder')) === null &&
+  (await page.getByRole('spinbutton', { name: 'Weight (lb)', exact: true }).getAttribute('placeholder')) === null &&
     (await page.getByRole('spinbutton', { name: 'Reps' }).getAttribute('placeholder')) === null,
 )
 check('no total hint for non-barbell', (await page.getByText(/lb total/).count()) === 0)
-await page.getByRole('spinbutton', { name: 'Weight (lb)' }).fill('25')
+await page.getByRole('spinbutton', { name: 'Weight (lb)', exact: true }).fill('25')
 await page.getByRole('spinbutton', { name: 'Reps' }).fill('6')
 await page.getByRole('button', { name: 'Add set' }).click()
 await page.waitForTimeout(200)
@@ -296,6 +304,35 @@ check(
   'chosen date carries to the Lift tab',
   (await page.getByLabel('Change date').first().inputValue()) === backDate,
 )
+
+// bodyweight is per-day and never seeded from another day
+const bwBack = page.getByRole('spinbutton', { name: 'Bodyweight (lb)' })
+check('bodyweight blank on a day without one', (await bwBack.inputValue()) === '')
+// and a bodyweight on its own is a real entry, not pruned as an empty session
+await bwBack.fill('168')
+await bwBack.blur()
+await page.waitForTimeout(250)
+const bwOnly = await page.evaluate(
+  (d) =>
+    JSON.parse(localStorage.getItem('training-app/v1')).sessions.find(
+      (s) => s.date === d && s.type === 'lift',
+    ),
+  backDate,
+)
+check('bodyweight-only session is kept', bwOnly?.bodyweight === 168, JSON.stringify(bwOnly?.bodyweight))
+check('bodyweight-only session has no sets', (bwOnly?.sets ?? []).length === 0)
+// clearing it again drops the otherwise-empty session
+await bwBack.fill('')
+await bwBack.blur()
+await page.waitForTimeout(250)
+const gone = await page.evaluate(
+  (d) =>
+    JSON.parse(localStorage.getItem('training-app/v1')).sessions.some(
+      (s) => s.date === d && s.type === 'lift',
+    ),
+  backDate,
+)
+check('clearing it drops the empty session', gone === false)
 
 // and "Today" returns without hunting through the calendar
 await page.getByRole('button', { name: 'Today', exact: true }).click()
@@ -667,7 +704,7 @@ await mp.getByRole('button', { name: 'bicep curl', exact: true }).click()
 await mp.waitForTimeout(100)
 check(
   'switching to an unlogged exercise clears the fields',
-  (await mp.getByRole('spinbutton', { name: 'Weight (lb)' }).inputValue()) === '',
+  (await mp.getByRole('spinbutton', { name: 'Weight (lb)', exact: true }).inputValue()) === '',
 )
 await mp.getByRole('button', { name: 'deadlift', exact: true }).click()
 await mp.waitForTimeout(100)

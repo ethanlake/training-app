@@ -85,6 +85,14 @@ export default function SessionDetail({ session, update, onClose, onDeleted }) {
         />
       )}
 
+      {session.bodyweight != null && (
+        <Section title="Bodyweight">
+          <p className="text-sm tabular-nums text-zinc-700 dark:text-zinc-300">
+            {session.bodyweight} lb
+          </p>
+        </Section>
+      )}
+
       {editing ? (
         <Notes value={session.notes ?? ''} onCommit={(notes) => edit((s) => ({ ...s, notes }))} />
       ) : (

@@ -178,14 +178,16 @@ export function deleteSession(data, id) {
   return { ...data, sessions: data.sessions.filter((s) => s.id !== id) }
 }
 
-// A session with no entries and no notes is an artifact of opening a tab, not a
-// record of anything — drop it so the log stays honest.
+// A session with nothing in it is an artifact of opening a tab, not a record of
+// anything — drop it so the log stays honest. A bodyweight on its own counts:
+// weighing in on a rest day is a real entry.
 export function pruneEmpty(data) {
   return {
     ...data,
     sessions: data.sessions.filter(
       (s) =>
         (s.notes ?? '').trim() !== '' ||
+        s.bodyweight != null ||
         (s.boulders?.length ?? 0) > 0 ||
         (s.routes?.length ?? 0) > 0 ||
         (s.sets?.length ?? 0) > 0,

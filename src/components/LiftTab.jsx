@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { findSession, todayStr, uid, updateDay, pruneEmpty } from '../lib/storage.js'
 import {
   formatWeight,
@@ -219,10 +219,73 @@ export default function LiftTab({ data, update, date, onDateChange }) {
         </Section>
       )}
 
+      <Section title="Bodyweight (lb)">
+        <Bodyweight
+          value={session?.bodyweight}
+          onCommit={(bodyweight) =>
+            update((d) =>
+              pruneEmpty(
+                updateDay(
+                  d,
+                  'lift',
+                  (s) => {
+                    const next = { ...s }
+                    // Clearing the box removes the key rather than storing a
+                    // zero, which would read as a real measurement.
+                    if (bodyweight === null) delete next.bodyweight
+                    else next.bodyweight = bodyweight
+                    return next
+                  },
+                  date,
+                ),
+              ),
+            )
+          }
+        />
+      </Section>
+
       <Notes
         value={session?.notes ?? ''}
         onCommit={(notes) => update((d) => pruneEmpty(updateDay(d, 'lift', (s) => ({ ...s, notes }), date)))}
       />
     </div>
+  )
+}
+
+// Blank unless this day already has one — never seeded from a previous day, so
+// a stale number cannot be mistaken for today's measurement. Commits on blur,
+// like the notes field, rather than rewriting storage on every keystroke.
+function Bodyweight({ value, onCommit }) {
+  const [draft, setDraft] = useState(value == null ? '' : String(value))
+
+  useEffect(() => {
+    setDraft(value == null ? '' : String(value))
+  }, [value])
+
+  const commit = () => {
+    const trimmed = draft.trim()
+    if (trimmed === '') {
+      if (value != null) onCommit(null)
+      return
+    }
+    const n = Number(trimmed)
+    // Garbage reverts to whatever was stored instead of being saved.
+    if (!Number.isFinite(n) || n <= 0) {
+      setDraft(value == null ? '' : String(value))
+      return
+    }
+    if (n !== value) onCommit(n)
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      aria-label="Bodyweight (lb)"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      className="field max-w-40"
+    />
   )
 }
