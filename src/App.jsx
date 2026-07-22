@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { load, save } from './lib/storage.js'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { exportIsStale, load, requestPersistence, save } from './lib/storage.js'
 import { applyTheme, storedTheme, systemPrefersDark, THEME_KEY } from './lib/theme.js'
 import ClimbTab from './components/ClimbTab.jsx'
 import LiftTab from './components/LiftTab.jsx'
@@ -16,7 +16,12 @@ const TABS = [
 export default function App() {
   const [data, setData] = useState(load)
   const [tab, setTab] = useState('climb')
-  const [overlay, setOverlay] = useState(null) // 'log' | 'settings' | null
+  // A stack of open views, one per history entry: [] | [log] | [log, detail].
+  // Centralizing it here is what lets one popstate handler unwind exactly one
+  // level, instead of each component guessing whether a back was meant for it.
+  const [stack, setStack] = useState([])
+  const overlay = stack[0]?.view ?? null
+  const top = stack[stack.length - 1] ?? null
 
   // One write path: every mutation is a whole-blob replace, then a save().
   const update = useCallback((fn) => {
@@ -25,6 +30,12 @@ export default function App() {
       save(next)
       return next
     })
+  }, [])
+
+  // Ask once per launch. Installed apps are granted this silently; in a plain
+  // browser tab it may be refused, which is what Settings reports.
+  useEffect(() => {
+    requestPersistence()
   }, [])
 
   // Explicit choice wins; until one is made, follow the system and keep
@@ -51,6 +62,8 @@ export default function App() {
   }
 
   // Keep the tab in the URL hash so a phone reload lands where it left off.
+  // replaceState, not pushState: on Android, back from a top-level tab should
+  // leave the app, not walk back through every tab the user has pressed.
   useEffect(() => {
     const key = window.location.hash.slice(1)
     if (TABS.some((t) => t.key === key)) setTab(key)
@@ -58,6 +71,25 @@ export default function App() {
   useEffect(() => {
     window.history.replaceState(null, '', `#${tab}`)
   }, [tab])
+
+  // Each open view is a history entry, so Android's back gesture closes what is
+  // open instead of quitting the app. Every close route calls back(), so the
+  // history stack and this state can never drift apart.
+  const pushView = (entry) => {
+    window.history.pushState({ view: entry.view }, '')
+    setStack((s) => [...s, entry])
+  }
+  const popView = () => window.history.back()
+
+  useEffect(() => {
+    const onPop = () => setStack((s) => s.slice(0, -1))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Recomputed whenever data changes or Settings closes, which covers both
+  // "first session logged" and "just exported".
+  const needsBackup = useMemo(() => exportIsStale(data), [data, overlay])
 
   const props = { data, update }
 
@@ -85,7 +117,7 @@ export default function App() {
           </nav>
 
           <button
-            onClick={() => setOverlay('log')}
+            onClick={() => pushView({ view: 'log' })}
             className="min-h-9 rounded-lg px-2.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             Log
@@ -99,11 +131,15 @@ export default function App() {
             {isDark ? '☀' : '☾'}
           </button>
           <button
-            onClick={() => setOverlay('settings')}
-            aria-label="Settings"
-            className="min-h-9 rounded-lg px-2.5 text-base text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            onClick={() => pushView({ view: 'settings' })}
+            aria-label={needsBackup ? 'Settings — backup is out of date' : 'Settings'}
+            className="relative min-h-9 rounded-lg px-2.5 text-base text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             ⚙
+            {/* the whole nag: a dot, no dialog, no banner */}
+            {needsBackup && (
+              <span className="absolute top-1 right-1 size-1.5 rounded-full bg-(--color-accent)" />
+            )}
           </button>
         </div>
       </header>
@@ -131,8 +167,16 @@ export default function App() {
         ))}
       </nav>
 
-      {overlay === 'log' && <SessionLog {...props} onClose={() => setOverlay(null)} />}
-      {overlay === 'settings' && <Settings {...props} onClose={() => setOverlay(null)} />}
+      {/* Done and the back gesture take the same path out. */}
+      {overlay === 'log' && (
+        <SessionLog
+          {...props}
+          openId={top?.view === 'detail' ? top.id : null}
+          onOpen={(id) => pushView({ view: 'detail', id })}
+          onClose={popView}
+        />
+      )}
+      {overlay === 'settings' && <Settings {...props} onClose={popView} />}
     </div>
   )
 }

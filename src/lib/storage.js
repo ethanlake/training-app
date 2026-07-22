@@ -4,6 +4,12 @@
 export const STORAGE_KEY = 'training-app/v1'
 export const VERSION = 1
 
+// Device-local, deliberately outside the export blob: a one-slot safety copy
+// taken before anything that could clobber history, and the date of the last
+// export so Settings can nag about it.
+export const BACKUP_KEY = 'training-app/v1.backup'
+export const LAST_EXPORT_KEY = 'training-app/last-export'
+
 export const emptyData = () => ({
   version: VERSION,
   sessions: [],
@@ -38,11 +44,62 @@ export function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return emptyData()
-    return migrate(JSON.parse(raw))
+    const parsed = JSON.parse(raw)
+    // A version change means this build is reshaping data written by an older
+    // one. Keep the original bytes before touching them.
+    if (parsed?.version !== VERSION) snapshot(`upgrade from v${parsed?.version}`, raw)
+    return migrate(parsed)
   } catch (err) {
     console.error('Failed to load saved data; starting empty.', err)
     return emptyData()
   }
+}
+
+// One rolling slot, overwritten each time — this is a seatbelt for the last
+// risky operation, not a version history. The export file is the real backup.
+export function snapshot(reason, raw = localStorage.getItem(STORAGE_KEY)) {
+  if (!raw) return
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify({ at: new Date().toISOString(), reason, raw }))
+  } catch (err) {
+    console.error('Could not write the safety copy.', err)
+  }
+}
+
+export function readBackup() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BACKUP_KEY))
+    if (!saved?.raw) return null
+    const data = migrate(JSON.parse(saved.raw))
+    return { at: new Date(saved.at), reason: saved.reason, data, sessions: data.sessions.length }
+  } catch {
+    return null
+  }
+}
+
+export function markExported(now = new Date()) {
+  try {
+    localStorage.setItem(LAST_EXPORT_KEY, now.toISOString())
+  } catch {
+    /* a failed timestamp must never block the download itself */
+  }
+}
+
+export function daysSinceExport(now = new Date()) {
+  const raw = localStorage.getItem(LAST_EXPORT_KEY)
+  if (!raw) return null
+  const then = new Date(raw)
+  if (Number.isNaN(then.getTime())) return null
+  return Math.floor((now - then) / 86400000)
+}
+
+export const EXPORT_STALE_DAYS = 30
+
+// Nag only once there is something worth losing.
+export function exportIsStale(data, now = new Date()) {
+  if (!data.sessions.length) return false
+  const days = daysSinceExport(now)
+  return days === null || days >= EXPORT_STALE_DAYS
 }
 
 export function save(data) {
@@ -56,6 +113,19 @@ export function save(data) {
 }
 
 export const serialize = (data) => JSON.stringify(data, null, 2)
+
+// Browsers evict "best effort" storage under pressure; an installed PWA is
+// normally granted persistence on request, but only if something asks. Safe to
+// call repeatedly — it resolves to the current state once decided.
+export async function requestPersistence() {
+  try {
+    if (!navigator.storage?.persist) return null
+    if (await navigator.storage.persisted()) return true
+    return await navigator.storage.persist()
+  } catch {
+    return null
+  }
+}
 
 export function storageBytes() {
   try {
@@ -125,6 +195,7 @@ export function exportJson(data) {
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+  markExported()
 }
 
 export function parseImport(text) {

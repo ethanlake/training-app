@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { formatBoulder } from '../lib/grades.js'
 import { Overlay } from './ui.jsx'
 import SessionDetail from './SessionDetail.jsx'
 
-export default function SessionLog({ data, update, onClose }) {
-  const [openId, setOpenId] = useState(null)
-
+// Which session is open is owned by App, because it is a history entry — see the
+// view stack there. This component just reports taps and renders what it is told.
+export default function SessionLog({ data, update, openId, onOpen, onClose }) {
   const sessions = useMemo(
     () => [...data.sessions].sort((a, b) => b.date.localeCompare(a.date) || a.type.localeCompare(b.type)),
     [data.sessions],
@@ -13,14 +13,7 @@ export default function SessionLog({ data, update, onClose }) {
   const open = sessions.find((s) => s.id === openId)
 
   if (open) {
-    return (
-      <SessionDetail
-        session={open}
-        update={update}
-        onClose={() => setOpenId(null)}
-        onDeleted={() => setOpenId(null)}
-      />
-    )
+    return <SessionDetail session={open} update={update} onClose={onClose} onDeleted={onClose} />
   }
 
   return (
@@ -32,7 +25,7 @@ export default function SessionLog({ data, update, onClose }) {
           {sessions.map((s) => (
             <li key={s.id}>
               <button
-                onClick={() => setOpenId(s.id)}
+                onClick={() => onOpen(s.id)}
                 className="flex w-full items-center gap-3 py-3.5 text-left"
               >
                 <span className="w-24 shrink-0 text-sm tabular-nums text-zinc-500">

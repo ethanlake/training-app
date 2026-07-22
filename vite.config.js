@@ -15,7 +15,10 @@ export default defineConfig({
         name: 'Training',
         short_name: 'Training',
         description: 'Climbing and lifting logger',
-        theme_color: '#18181b',
+        // Android paints the splash and status bar from these before any script
+        // runs, so they match the light body; theme.js takes over the
+        // theme-color meta once the app knows which scheme is active.
+        theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/training-app/',
