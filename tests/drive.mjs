@@ -149,8 +149,8 @@ check(
   (await page.getByRole('spinbutton', { name: 'Per side (lb)' }).inputValue()) === '115',
   await page.getByRole('spinbutton', { name: 'Per side (lb)' }).inputValue(),
 )
-// a non-barbell lift keeps a plain field and a plain read-out
-await page.getByRole('button', { name: 'pullup', exact: true }).click()
+// a plain lift keeps a plain field and a plain read-out
+await page.getByRole('button', { name: 'split squats', exact: true }).click()
 await page.waitForTimeout(150)
 check('non-barbell field stays plain', (await page.getByRole('spinbutton', { name: 'Weight (lb)', exact: true }).count()) === 1)
 // an exercise with no history shows empty boxes, not suggested numbers
@@ -169,13 +169,56 @@ const pullup = await page.evaluate(
     JSON.parse(localStorage.getItem('training-app/v1'))
       .sessions.filter((s) => s.type === 'lift')
       .flatMap((s) => s.sets)
-      .find((x) => x.exercise === 'pullup'),
+      .find((x) => x.exercise === 'split squats'),
 )
 check('non-barbell weight stored as typed', pullup?.weight === 25, String(pullup?.weight))
 check('non-barbell set reads plain', await page.getByText('25 × 6').first().isVisible())
 // remove it again so later counts stay predictable
 await page.getByText('25 × 6').first().click()
 await page.waitForTimeout(200)
+
+// a pullup at zero is a real set: the load is your own body
+await page.getByRole('button', { name: 'pullup', exact: true }).click()
+await page.waitForTimeout(150)
+const added = page.getByRole('spinbutton', { name: 'Added (lb)', exact: true })
+check('pullup field asks for added weight', (await added.count()) === 1)
+await added.fill('0')
+await page.getByRole('spinbutton', { name: 'Reps' }).fill('8')
+await page.waitForTimeout(150)
+check('zero is a valid pullup weight', await page.getByRole('button', { name: 'Add set' }).isEnabled())
+await page.getByRole('button', { name: 'Add set' }).click()
+await page.waitForTimeout(250)
+const bwPull = await page.evaluate(() =>
+  JSON.parse(localStorage.getItem('training-app/v1'))
+    .sessions.filter((s) => s.type === 'lift')
+    .flatMap((s) => s.sets ?? [])
+    .find((x) => x.exercise === 'pullup'),
+)
+check('zero-weight pullup stored', bwPull?.weight === 0 && bwPull?.reps === 8, JSON.stringify(bwPull?.weight))
+check('zero pullup reads as bodyweight', await page.getByText('bodyweight × 8').first().isVisible())
+// an added-weight pullup reads as a plus, not an absolute
+await added.fill('25')
+await page.getByRole('spinbutton', { name: 'Reps' }).fill('5')
+await page.getByRole('button', { name: 'Add set' }).click()
+await page.waitForTimeout(250)
+check('weighted pullup reads as +25', await page.getByText('+25 × 5').first().isVisible())
+// an empty box is still not a set
+await added.fill('')
+await page.waitForTimeout(150)
+check('blank is still rejected', !(await page.getByRole('button', { name: 'Add set' }).isEnabled()))
+// clean up both pullup sets
+await page.getByText('bodyweight × 8').first().click()
+await page.waitForTimeout(200)
+await page.getByText('+25 × 5').first().click()
+await page.waitForTimeout(200)
+
+// bicep curl is a barbell lift now
+await page.getByRole('button', { name: 'bicep curl', exact: true }).click()
+await page.waitForTimeout(150)
+check(
+  'bicep curl asks for per side',
+  (await page.getByRole('spinbutton', { name: 'Per side (lb)' }).count()) === 1,
+)
 
 // ---- deleting tags and exercises -------------------------------------------
 // Long-press (or right-click) a chip to remove it; anything already used by a
@@ -768,7 +811,7 @@ await mp.waitForTimeout(150)
 // deadlift is the default chip, so the field is the per-side one
 check('inputs prefilled from history', (await mp.getByRole('spinbutton', { name: 'Per side (lb)' }).inputValue()) !== '')
 check('Add set enabled on arrival', await mp.getByRole('button', { name: 'Add set' }).isEnabled())
-await mp.getByRole('button', { name: 'bicep curl', exact: true }).click()
+await mp.getByRole('button', { name: 'split squats', exact: true }).click()
 await mp.waitForTimeout(100)
 check(
   'switching to an unlogged exercise clears the fields',

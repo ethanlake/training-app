@@ -3,6 +3,7 @@ import { findSession, todayStr, uid, updateDay, pruneEmpty } from '../lib/storag
 import {
   formatWeight,
   isBarbell,
+  isBodyweight,
   num,
   sideFromTotal,
   totalFromSide,
@@ -44,6 +45,9 @@ export default function LiftTab({ data, update, date, onDateChange }) {
   const [rpe, setRpe] = useState(seed?.rpe ?? 7)
 
   const perSide = isBarbell(exercise)
+  // A pullup at zero is a real set — the load is you — so blankness, not the
+  // value, is what makes the entry invalid here.
+  const bodyweight = isBodyweight(exercise)
 
   const pickExercise = (name) => {
     setExercise(name)
@@ -76,7 +80,9 @@ export default function LiftTab({ data, update, date, onDateChange }) {
   // An empty field is Number('') === 0, so blankness is checked separately —
   // a bare bar (0 per side) is a legitimate entry, an empty box is not.
   const weightOk =
-    weight.trim() !== '' && Number.isFinite(entered) && (perSide ? entered >= 0 : entered > 0)
+    weight.trim() !== '' &&
+    Number.isFinite(entered) &&
+    (perSide || bodyweight ? entered >= 0 : entered > 0)
   const canAdd = weightOk && Number.isFinite(r) && r > 0
 
   // What actually gets stored: the true weight on the bar.
@@ -134,7 +140,7 @@ export default function LiftTab({ data, update, date, onDateChange }) {
         <div className="flex gap-2">
           <label className="flex-1">
             <span className="label mb-1 block">
-              {perSide ? 'Per side (lb)' : 'Weight (lb)'}
+              {perSide ? 'Per side (lb)' : bodyweight ? 'Added (lb)' : 'Weight (lb)'}
             </span>
             <input
               type="number"
@@ -222,7 +228,7 @@ export default function LiftTab({ data, update, date, onDateChange }) {
       <Section title="Bodyweight (lb)">
         <Bodyweight
           value={session?.bodyweight}
-          onCommit={(bodyweight) =>
+          onCommit={(lbs) =>
             update((d) =>
               pruneEmpty(
                 updateDay(
@@ -232,8 +238,8 @@ export default function LiftTab({ data, update, date, onDateChange }) {
                     const next = { ...s }
                     // Clearing the box removes the key rather than storing a
                     // zero, which would read as a real measurement.
-                    if (bodyweight === null) delete next.bodyweight
-                    else next.bodyweight = bodyweight
+                    if (lbs === null) delete next.bodyweight
+                    else next.bodyweight = lbs
                     return next
                   },
                   date,

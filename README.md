@@ -46,10 +46,13 @@ restores it.
 
 ## Barbell weights
 
-Deadlift, bench press, front squat and overhead press are logged the way they
-are loaded: the weight on **one end of the bar**. The app adds the other side
-and the 45 lb bar, so entering 115 records a 275 lb lift, and sets read back as
-`115 (275 tot)`.
+Deadlift, bench press, front squat, overhead press and bicep curl are logged the
+way they are loaded: the weight on **one end of the bar**. The app adds the
+other side and the 45 lb bar, so entering 115 records a 275 lb lift, and sets
+read back as `115 (275 tot)`.
+
+Pullups take the **added** weight instead, so 0 is a real entry and reads back
+as `bodyweight`; anything else reads as `+25`.
 
 What is stored is always the true total, because PRs and volume are computed
 from it — per-side is an input and display convention only. Other exercises,
