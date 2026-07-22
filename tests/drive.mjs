@@ -44,7 +44,9 @@ page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
 
 // Sequential dialog answers: true = OK, false = Cancel, string = prompt text.
 let dialogQueue = []
+let lastDialog = ''
 page.on('dialog', async (d) => {
+  lastDialog = d.message()
   const next = dialogQueue.shift()
   if (next === false || next === undefined) return d.dismiss()
   return d.accept(typeof next === 'string' ? next : undefined)
@@ -160,6 +162,94 @@ check('non-barbell set reads plain', await page.getByText('25 × 6').first().isV
 // remove it again so later counts stay predictable
 await page.getByText('25 × 6').first().click()
 await page.waitForTimeout(200)
+
+// ---- deleting tags and exercises -------------------------------------------
+// Long-press (or right-click) a chip to remove it; anything already used by a
+// logged entry must refuse, or the data would reference something the picker
+// can no longer explain.
+const chip = (name) => page.getByRole('button', { name, exact: true })
+
+await page.getByRole('button', { name: 'Lift', exact: true }).first().click()
+await page.waitForTimeout(150)
+
+dialogQueue = []
+await chip('deadlift').click({ button: 'right' })
+await page.waitForTimeout(200)
+check('in-use exercise refused', /cannot be deleted/.test(lastDialog), lastDialog.split('\n')[0])
+check('refusal names the entry count', /used by 2 logged entries/.test(lastDialog), lastDialog.split('\n')[0])
+check('refused exercise still listed', (await chip('deadlift').count()) === 1)
+
+dialogQueue = [true]
+await chip('bicep curl').click({ button: 'right' })
+await page.waitForTimeout(250)
+check('unused exercise deleted', (await chip('bicep curl').count()) === 0)
+check(
+  'deletion persisted as hidden',
+  (await page.evaluate(() => JSON.parse(localStorage.getItem('training-app/v1')).hiddenExercises)).includes(
+    'bicep curl',
+  ),
+)
+
+// re-adding the same name brings a built-in back
+dialogQueue = ['bicep curl']
+await page.getByRole('button', { name: 'Add custom exercise' }).click()
+await page.waitForTimeout(250)
+check('re-adding un-hides a built-in', (await chip('bicep curl').count()) === 1)
+check(
+  'un-hidden name not duplicated as custom',
+  (await page.evaluate(() => JSON.parse(localStorage.getItem('training-app/v1')).customExercises)).length === 0,
+)
+
+// tags behave the same way
+await page.getByRole('button', { name: 'Climb', exact: true }).first().click()
+await page.waitForTimeout(150)
+dialogQueue = []
+await chip('compression').click({ button: 'right' })
+await page.waitForTimeout(200)
+check('in-use tag refused', /cannot be deleted/.test(lastDialog), lastDialog.split('\n')[0])
+check('refused tag still listed', (await chip('compression').count()) === 1)
+
+dialogQueue = [true]
+await chip('slab').click({ button: 'right' })
+await page.waitForTimeout(250)
+check('unused tag deleted', (await chip('slab').count()) === 0)
+dialogQueue = ['slab']
+await page.getByRole('button', { name: 'Add custom tag' }).click()
+await page.waitForTimeout(250)
+check('deleted tag can be added back', (await chip('slab').count()) === 1)
+
+// a real long-press must not also toggle the chip it was held on
+const dyn = chip('dynamic')
+const wasOn = (await dyn.getAttribute('class')).includes('chip-on')
+dialogQueue = [false] // cancel the delete
+await dyn.hover()
+await page.mouse.down()
+await page.waitForTimeout(700)
+await page.mouse.up()
+await page.waitForTimeout(250)
+check('long-press offers deletion', /Delete the tag/.test(lastDialog), lastDialog)
+check('cancelled delete keeps the tag', (await dyn.count()) === 1)
+check(
+  'long-press does not toggle the chip',
+  (await dyn.getAttribute('class')).includes('chip-on') === wasOn,
+)
+
+// The real target is a touchscreen, where Android also fires its own
+// contextmenu mid-hold — one hold must still produce exactly one dialog.
+let dialogCount = 0
+const countDialogs = () => (dialogCount += 1)
+page.on('dialog', countDialogs)
+dialogQueue = [false]
+const box2 = await dyn.boundingBox()
+const at = { clientX: box2.x + box2.width / 2, clientY: box2.y + box2.height / 2, pointerType: 'touch' }
+await dyn.dispatchEvent('pointerdown', at)
+await page.waitForTimeout(700)
+await dyn.dispatchEvent('contextmenu', at) // what Android does on its own
+await dyn.dispatchEvent('pointerup', at)
+await page.waitForTimeout(250)
+page.off('dialog', countDialogs)
+check('touch hold offers deletion', /Delete the tag/.test(lastDialog), lastDialog)
+check('one hold opens exactly one dialog', dialogCount === 1, `${dialogCount} dialogs`)
 
 // ---- back-dating -----------------------------------------------------------
 // Tapping the date opens a native picker; picking an older day retargets every

@@ -1,6 +1,7 @@
 // Shared shells used by more than one tab.
 
 import { todayStr } from '../lib/storage.js'
+import { useLongPress } from '../lib/useLongPress.js'
 
 export function Section({ title, action, children }) {
   return (
@@ -63,9 +64,18 @@ export function SubNav({ value, onChange, options }) {
   )
 }
 
-export function Chip({ on, children, ...rest }) {
+// Pass onLongPress to make a chip removable: hold on a phone, right-click on a
+// desktop.
+export function Chip({ on, children, onLongPress, ...rest }) {
+  const press = useLongPress(onLongPress ?? (() => {}))
   return (
-    <button type="button" className={`chip ${on ? 'chip-on' : ''}`} {...rest}>
+    <button
+      type="button"
+      className={`chip ${on ? 'chip-on' : ''}`}
+      title={onLongPress ? 'Hold to delete' : undefined}
+      {...(onLongPress ? press : null)}
+      {...rest}
+    >
       {children}
     </button>
   )

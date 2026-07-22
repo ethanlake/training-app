@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { findSession, todayStr, uid, updateDay, pruneEmpty } from '../lib/storage.js'
 import {
-  DEFAULT_EXERCISES,
   formatWeight,
   isBarbell,
   num,
   sideFromTotal,
   totalFromSide,
 } from '../lib/exercises.js'
+import { addChoice, listChoices, promptRemove } from '../lib/choices.js'
 import { Chip, DateHeading, Section } from './ui.jsx'
 import Notes from './Notes.jsx'
 
@@ -17,7 +17,7 @@ export default function LiftTab({ data, update, date, onDateChange }) {
   const session = findSession(data, 'lift', date)
   const sets = session?.sets ?? []
 
-  const exercises = [...DEFAULT_EXERCISES, ...data.customExercises]
+  const exercises = listChoices(data, 'exercise')
 
   // Most recent set of each exercise, anywhere in the history — a new set is
   // nearly always a repeat of the last one, so it seeds the inputs outright
@@ -59,8 +59,17 @@ export default function LiftTab({ data, update, date, onDateChange }) {
   const addCustomExercise = () => {
     const name = window.prompt('New exercise')?.trim().toLowerCase()
     if (!name) return
-    if (!exercises.includes(name)) update((d) => ({ ...d, customExercises: [...d.customExercises, name] }))
+    // Also un-hides a built-in exercise that was deleted earlier.
+    update((d) => addChoice(d, 'exercise', name))
     setExercise(name)
+  }
+
+  // Long-press (or right-click) an exercise to remove it, unless it is in use.
+  const deleteExercise = (name) => {
+    const next = promptRemove(data, 'exercise', name, { minRemaining: 1 })
+    if (!next) return
+    update(next)
+    if (name === exercise) pickExercise(listChoices(next, 'exercise')[0])
   }
 
   const entered = Number(weight)
@@ -107,7 +116,12 @@ export default function LiftTab({ data, update, date, onDateChange }) {
       <Section title="Exercise">
         <div className="flex flex-wrap gap-1.5">
           {exercises.map((e) => (
-            <Chip key={e} on={e === exercise} onClick={() => pickExercise(e)}>
+            <Chip
+              key={e}
+              on={e === exercise}
+              onClick={() => pickExercise(e)}
+              onLongPress={() => deleteExercise(e)}
+            >
               {e}
             </Chip>
           ))}

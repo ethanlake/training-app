@@ -15,6 +15,10 @@ export const emptyData = () => ({
   sessions: [],
   customBoulderTags: [],
   customExercises: [],
+  // Built-in tags/exercises the user has removed. They cannot be deleted from
+  // the code, so they are hidden instead; re-adding the name clears it.
+  hiddenBoulderTags: [],
+  hiddenExercises: [],
 })
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
@@ -32,11 +36,14 @@ function migrate(raw) {
     // its shape normalized rather than discarded.
     console.warn(`Unknown data version ${raw.version}; loading defensively.`)
   }
+  const list = (v) => (Array.isArray(v) ? v : [])
   return {
     version: VERSION,
-    sessions: Array.isArray(raw.sessions) ? raw.sessions : [],
-    customBoulderTags: Array.isArray(raw.customBoulderTags) ? raw.customBoulderTags : [],
-    customExercises: Array.isArray(raw.customExercises) ? raw.customExercises : [],
+    sessions: list(raw.sessions),
+    customBoulderTags: list(raw.customBoulderTags),
+    customExercises: list(raw.customExercises),
+    hiddenBoulderTags: list(raw.hiddenBoulderTags),
+    hiddenExercises: list(raw.hiddenExercises),
   }
 }
 
@@ -233,5 +240,8 @@ export function mergeData(current, incoming) {
     sessions,
     customBoulderTags: uniq([...current.customBoulderTags, ...incoming.customBoulderTags]),
     customExercises: uniq([...current.customExercises, ...incoming.customExercises]),
+    // A name hidden on either side stays hidden; re-adding it is one tap.
+    hiddenBoulderTags: uniq([...current.hiddenBoulderTags, ...incoming.hiddenBoulderTags]),
+    hiddenExercises: uniq([...current.hiddenExercises, ...incoming.hiddenExercises]),
   }
 }

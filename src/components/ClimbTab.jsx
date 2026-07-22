@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import {
   BOULDER_GRADES,
-  DEFAULT_BOULDER_TAGS,
   ROUTE_TAGS,
   SPORT_GRADES,
   formatBoulder,
   formatSport,
 } from '../lib/grades.js'
 import { findSession, todayStr, uid, updateDay, pruneEmpty } from '../lib/storage.js'
+import { addChoice, listChoices, promptRemove } from '../lib/choices.js'
 import { Chip, DateHeading, Section, SubNav } from './ui.jsx'
 import Notes from './Notes.jsx'
 
@@ -21,7 +21,7 @@ export default function ClimbTab({ data, update, date, onDateChange }) {
   const [tags, setTags] = useState([])
   const [mode, setMode] = useState('boulder')
 
-  const allTags = [...DEFAULT_BOULDER_TAGS, ...data.customBoulderTags]
+  const allTags = listChoices(data, 'tag')
   // "Today" would be a lie while back-filling.
   const dayLabel = date === todayStr() ? 'Today' : 'Logged'
 
@@ -65,8 +65,17 @@ export default function ClimbTab({ data, update, date, onDateChange }) {
   const addCustomTag = () => {
     const name = window.prompt('New tag')?.trim().toLowerCase()
     if (!name) return
-    if (!allTags.includes(name)) update((d) => ({ ...d, customBoulderTags: [...d.customBoulderTags, name] }))
+    // Also un-hides a built-in tag that was deleted earlier.
+    update((d) => addChoice(d, 'tag', name))
     setTags((prev) => (prev.includes(name) ? prev : [...prev, name]))
+  }
+
+  // Long-press (or right-click) a tag to remove it, unless it is in use.
+  const deleteTag = (name) => {
+    const next = promptRemove(data, 'tag', name)
+    if (!next) return
+    update(next)
+    setTags((prev) => prev.filter((t) => t !== name))
   }
 
   return (
@@ -104,7 +113,12 @@ export default function ClimbTab({ data, update, date, onDateChange }) {
           <Section title="Tags">
             <div className="flex flex-wrap gap-1.5">
               {allTags.map((t) => (
-                <Chip key={t} on={tags.includes(t)} onClick={() => toggleTag(t)}>
+                <Chip
+                  key={t}
+                  on={tags.includes(t)}
+                  onClick={() => toggleTag(t)}
+                  onLongPress={() => deleteTag(t)}
+                >
                   {t}
                 </Chip>
               ))}

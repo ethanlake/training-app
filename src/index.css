@@ -57,6 +57,8 @@
     @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200
       px-3 text-sm text-zinc-600 transition-colors select-none
       dark:border-zinc-800 dark:text-zinc-400;
+    /* chips are long-pressed to delete; suppress the OS text-selection callout */
+    -webkit-touch-callout: none;
   }
   .chip-on {
     @apply border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100

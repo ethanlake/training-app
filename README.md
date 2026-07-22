@@ -23,6 +23,16 @@ On iOS an installed app keeps storage separate from Safari's, so install first
 and log second, or the app will look empty. To move data across, export and
 import.
 
+## Tags and exercises
+
+The `+` chip adds one. To remove one, **hold it** (or right-click on a desktop)
+and confirm. Anything already used by a logged entry refuses to delete, naming
+how many entries use it — the picker should never stop explaining data that
+exists.
+
+Built-in names are hidden rather than erased, so adding the same name back
+restores it.
+
 ## Barbell weights
 
 Deadlift, bench press, front squat and overhead press are logged the way they
