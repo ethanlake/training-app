@@ -1,19 +1,15 @@
 import { useMemo, useState } from 'react'
 import { findSession, todayStr, uid, updateDay, pruneEmpty } from '../lib/storage.js'
+import {
+  DEFAULT_EXERCISES,
+  formatWeight,
+  isBarbell,
+  num,
+  sideFromTotal,
+  totalFromSide,
+} from '../lib/exercises.js'
 import { Chip, DateHeading, Section } from './ui.jsx'
 import Notes from './Notes.jsx'
-
-// Ordered by how often they get logged, not alphabetically — the first chip
-// should usually be the right one.
-export const DEFAULT_EXERCISES = [
-  'deadlift',
-  'bench press',
-  'pullup',
-  'front squat',
-  'overhead press',
-  'split squats',
-  'bicep curl',
-]
 
 const RPE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -35,20 +31,27 @@ export default function LiftTab({ data, update, date, onDateChange }) {
     [data.sessions],
   )
 
+  // The field always holds what the user types: per-side for barbell lifts,
+  // plain weight otherwise. Stored sets are always totals, so seeding the field
+  // from history converts back down.
+  const fieldValue = (set) =>
+    set ? String(num(isBarbell(set.exercise) ? sideFromTotal(set.weight) : set.weight)) : ''
+
   const [exercise, setExercise] = useState(exercises[0])
   const seed = recentSets.find((s) => s.exercise === exercises[0])
-  const [weight, setWeight] = useState(seed ? String(seed.weight) : '')
+  const [weight, setWeight] = useState(() => fieldValue(seed))
   const [reps, setReps] = useState(seed ? String(seed.reps) : '')
   const [rpe, setRpe] = useState(seed?.rpe ?? 7)
 
   const lastSet = recentSets.find((s) => s.exercise === exercise)
+  const perSide = isBarbell(exercise)
 
   const pickExercise = (name) => {
     setExercise(name)
     const prev = recentSets.find((s) => s.exercise === name)
     // Never carry the previous exercise's numbers over — a 275 lb deadlift
     // left sitting in the box under "bicep curl" is a wrong entry waiting.
-    setWeight(prev ? String(prev.weight) : '')
+    setWeight(fieldValue(prev))
     setReps(prev ? String(prev.reps) : '')
     setRpe(prev?.rpe ?? 7)
   }
@@ -60,9 +63,16 @@ export default function LiftTab({ data, update, date, onDateChange }) {
     setExercise(name)
   }
 
-  const w = Number(weight)
+  const entered = Number(weight)
   const r = Number(reps)
-  const canAdd = Number.isFinite(w) && w > 0 && Number.isFinite(r) && r > 0
+  // An empty field is Number('') === 0, so blankness is checked separately —
+  // a bare bar (0 per side) is a legitimate entry, an empty box is not.
+  const weightOk =
+    weight.trim() !== '' && Number.isFinite(entered) && (perSide ? entered >= 0 : entered > 0)
+  const canAdd = weightOk && Number.isFinite(r) && r > 0
+
+  // What actually gets stored: the true weight on the bar.
+  const total = perSide ? totalFromSide(entered) : entered
 
   const addSet = () => {
     if (!canAdd) return
@@ -70,7 +80,7 @@ export default function LiftTab({ data, update, date, onDateChange }) {
       updateDay(
         d,
         'lift',
-        (s) => ({ ...s, sets: [...s.sets, { id: uid(), exercise, weight: w, reps: r, rpe }] }),
+        (s) => ({ ...s, sets: [...s.sets, { id: uid(), exercise, weight: total, reps: r, rpe }] }),
         date,
       ),
     )
@@ -110,13 +120,15 @@ export default function LiftTab({ data, update, date, onDateChange }) {
       <Section title="Set">
         <div className="flex gap-2">
           <label className="flex-1">
-            <span className="label mb-1 block">Weight (lb)</span>
+            <span className="label mb-1 block">
+              {perSide ? 'Per side (lb)' : 'Weight (lb)'}
+            </span>
             <input
               type="number"
               inputMode="decimal"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              placeholder={lastSet ? String(lastSet.weight) : '135'}
+              placeholder={lastSet ? fieldValue(lastSet) : perSide ? '90' : '135'}
               className="field"
             />
           </label>
@@ -132,6 +144,13 @@ export default function LiftTab({ data, update, date, onDateChange }) {
             />
           </label>
         </div>
+
+        {/* the arithmetic, done for you, before you commit to the set */}
+        {perSide && (
+          <p className="mt-2 text-sm text-zinc-500 tabular-nums">
+            {weightOk ? `${num(total)} lb total — ${num(entered)} a side plus the 45 lb bar` : ` `}
+          </p>
+        )}
 
         <div className="mt-3">
           <span className="label mb-1 block">RPE {rpe}</span>
@@ -173,7 +192,7 @@ export default function LiftTab({ data, update, date, onDateChange }) {
                           text-sm tabular-nums active:opacity-60 dark:bg-zinc-900"
                       >
                         <span className="font-medium">
-                          {s.weight}
+                          {formatWeight(s.exercise, s.weight)}
                           <span className="text-zinc-400"> × </span>
                           {s.reps}
                         </span>

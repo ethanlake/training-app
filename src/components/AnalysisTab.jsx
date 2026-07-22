@@ -12,6 +12,7 @@ import {
   windowSessions,
 } from '../lib/stats.js'
 import { formatBoulder } from '../lib/grades.js'
+import { isBarbell } from '../lib/exercises.js'
 import BarChart, { Empty } from './charts/BarChart.jsx'
 import LineChart from './charts/LineChart.jsx'
 import { Section } from './ui.jsx'
@@ -105,7 +106,12 @@ export default function AnalysisTab({ data }) {
       >
         {activeExercise ? (
           <>
-            <p className="mb-2 text-sm text-zinc-500">{activeExercise}</p>
+            {/* 1RM is a derived total, never per-side — say so, or a barbell
+                number here reads as plates on one end. */}
+            <p className="mb-2 text-sm text-zinc-500">
+              {activeExercise}
+              {isBarbell(activeExercise) && ' · total on the bar'}
+            </p>
             <OneRm sessions={sessions} exercise={activeExercise} />
           </>
         ) : (

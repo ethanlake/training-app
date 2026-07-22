@@ -94,13 +94,16 @@ await page.screenshot({ path: `${SHOTS}/desktop-climb.png` })
 // ---- lifting session -------------------------------------------------------
 await page.getByRole('button', { name: 'Lift', exact: true }).first().click()
 await page.getByRole('button', { name: 'deadlift', exact: true }).click()
-await page.getByRole('spinbutton', { name: 'Weight (lb)' }).fill('275')
+// barbell lifts are entered per side; 115 a side + the 45 lb bar = 275 total
+check('barbell field asks for per side', (await page.getByRole('spinbutton', { name: 'Per side (lb)' }).count()) === 1)
+await page.getByRole('spinbutton', { name: 'Per side (lb)' }).fill('115')
 await page.getByRole('spinbutton', { name: 'Reps' }).fill('5')
+check('running total shown while typing', await page.getByText(/275 lb total/).isVisible())
 await page.getByRole('button', { name: '8', exact: true }).click()
 await page.getByRole('button', { name: 'Add set' }).click()
 await page.getByRole('button', { name: 'Add set' }).click()
 await page.getByRole('button', { name: 'bench press', exact: true }).click()
-await page.getByRole('spinbutton', { name: 'Weight (lb)' }).fill('185')
+await page.getByRole('spinbutton', { name: 'Per side (lb)' }).fill('70')
 await page.getByRole('spinbutton', { name: 'Reps' }).fill('8')
 await page.getByRole('button', { name: 'Add set' }).click()
 await page.locator('textarea').fill('Bar speed good.')
@@ -119,8 +122,44 @@ check('route persisted', climb?.routes.length === 1 && climb.routes[0].grade ===
 check('route tags', JSON.stringify(climb?.routes[0].tags) === '["indoor","outdoor"]', JSON.stringify(climb?.routes[0].tags))
 check('climb notes persisted', climb?.notes === climbNotes, JSON.stringify(climb?.notes))
 check('3 sets persisted', lift?.sets.length === 3, `got ${lift?.sets.length}`)
+check('per-side entry stored as the true total', lift?.sets[0].weight === 275, String(lift?.sets[0].weight))
+check('bench stored as total', lift?.sets[2].weight === 185, String(lift?.sets[2].weight))
 check('set prefill worked', lift?.sets[1].weight === 275 && lift.sets[1].reps === 5)
 check('lift notes persisted', lift?.notes === 'Bar speed good.')
+
+// the requested read-out: per side, with the total in parentheses
+await page.getByRole('button', { name: 'Lift', exact: true }).first().click()
+await page.waitForTimeout(200)
+check('barbell set reads "w (x tot)"', await page.getByText('115 (275 tot)').first().isVisible())
+check('bench set reads "w (x tot)"', await page.getByText('70 (185 tot)').first().isVisible())
+// prefill must come back down to per-side, not re-enter the total: the default
+// chip after a reload is deadlift, whose last set was stored as 275
+check(
+  'prefill converts the total back to per side',
+  (await page.getByRole('spinbutton', { name: 'Per side (lb)' }).inputValue()) === '115',
+  await page.getByRole('spinbutton', { name: 'Per side (lb)' }).inputValue(),
+)
+// a non-barbell lift keeps a plain field and a plain read-out
+await page.getByRole('button', { name: 'pullup', exact: true }).click()
+await page.waitForTimeout(150)
+check('non-barbell field stays plain', (await page.getByRole('spinbutton', { name: 'Weight (lb)' }).count()) === 1)
+check('no total hint for non-barbell', (await page.getByText(/lb total/).count()) === 0)
+await page.getByRole('spinbutton', { name: 'Weight (lb)' }).fill('25')
+await page.getByRole('spinbutton', { name: 'Reps' }).fill('6')
+await page.getByRole('button', { name: 'Add set' }).click()
+await page.waitForTimeout(200)
+const pullup = await page.evaluate(
+  () =>
+    JSON.parse(localStorage.getItem('training-app/v1'))
+      .sessions.filter((s) => s.type === 'lift')
+      .flatMap((s) => s.sets)
+      .find((x) => x.exercise === 'pullup'),
+)
+check('non-barbell weight stored as typed', pullup?.weight === 25, String(pullup?.weight))
+check('non-barbell set reads plain', await page.getByText('25 × 6').first().isVisible())
+// remove it again so later counts stay predictable
+await page.getByText('25 × 6').first().click()
+await page.waitForTimeout(200)
 
 // ---- back-dating -----------------------------------------------------------
 // Tapping the date opens a native picker; picking an older day retargets every
@@ -246,6 +285,15 @@ const allBoulders = await readStat('Boulders')
 check('window switch changes stats', Number(allBoulders) > Number(monthBoulders), `month=${monthBoulders} all=${allBoulders}`)
 check('streak computed', Number(await readStat('Week streak')) > 1, await readStat('Week streak'))
 check('hardest grade shown', /^V\d+$/.test(await readStat('Hardest')), await readStat('Hardest'))
+// volume and 1RM must be computed from true totals, never per-side entries
+const volume = Number((await readStat('Volume \\(lb\\)')).replace(/,/g, ''))
+const expectedVolume = await page.evaluate(() =>
+  JSON.parse(localStorage.getItem('training-app/v1'))
+    .sessions.filter((s) => s.type === 'lift')
+    .flatMap((s) => s.sets)
+    .reduce((acc, x) => acc + x.weight * x.reps, 0),
+)
+check('volume uses the total on the bar', volume === expectedVolume, `${volume} vs ${expectedVolume}`)
 
 const bars = await page.locator('svg polyline').count()
 check('line charts rendered', bars >= 2, `${bars} polylines`)
@@ -424,7 +472,8 @@ await mp.getByRole('button', { name: 'Lift', exact: true }).last().click()
 await mp.waitForTimeout(150)
 // the last set of the default exercise should be loaded into the fields, not
 // merely hinted at, so "Add set" is usable on arrival
-check('inputs prefilled from history', (await mp.getByRole('spinbutton', { name: 'Weight (lb)' }).inputValue()) !== '')
+// deadlift is the default chip, so the field is the per-side one
+check('inputs prefilled from history', (await mp.getByRole('spinbutton', { name: 'Per side (lb)' }).inputValue()) !== '')
 check('Add set enabled on arrival', await mp.getByRole('button', { name: 'Add set' }).isEnabled())
 await mp.getByRole('button', { name: 'bicep curl', exact: true }).click()
 await mp.waitForTimeout(100)

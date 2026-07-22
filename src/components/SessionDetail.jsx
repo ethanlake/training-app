@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { formatBoulder, formatSport } from '../lib/grades.js'
+import { formatWeight } from '../lib/exercises.js'
 import { deleteSession, updateSession } from '../lib/storage.js'
 import Notes from './Notes.jsx'
 import { Overlay, Section } from './ui.jsx'
@@ -75,7 +76,7 @@ export default function SessionDetail({ session, update, onClose, onDeleted }) {
             <>
               <span className="font-medium">{s.exercise}</span>
               <span className="tabular-nums">
-                {s.weight} × {s.reps}
+                {formatWeight(s.exercise, s.weight)} × {s.reps}
               </span>
               <span className="text-xs text-zinc-500">RPE {s.rpe}</span>
             </>
