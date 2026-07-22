@@ -7,6 +7,10 @@ Three tabs: **Climb** (boulders and sport routes), **Lift** (sets), and
 **Analysis** (histograms, trends, streaks). A session opens automatically for
 today; there is no start/stop.
 
+Tap the date to back-fill a session you forgot to log — it opens the phone's own
+calendar, retargets both logging tabs, and resets to today on the next launch so
+a back-fill can never become the silent default.
+
 ## Install it on a phone
 
 Open the deployed URL and install it — **Android/Chrome**: menu → *Install app*.

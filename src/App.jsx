@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { exportIsStale, load, requestPersistence, save } from './lib/storage.js'
+import { exportIsStale, load, requestPersistence, save, todayStr } from './lib/storage.js'
 import { applyTheme, storedTheme, systemPrefersDark, THEME_KEY } from './lib/theme.js'
 import ClimbTab from './components/ClimbTab.jsx'
 import LiftTab from './components/LiftTab.jsx'
@@ -16,6 +16,10 @@ const TABS = [
 export default function App() {
   const [data, setData] = useState(load)
   const [tab, setTab] = useState('climb')
+  // Which day the logging tabs write to. Deliberately not persisted: it resets
+  // to today on every launch, so a back-fill can never silently become the
+  // default and swallow a real session.
+  const [date, setDate] = useState(todayStr)
   // A stack of open views, one per history entry: [] | [log] | [log, detail].
   // Centralizing it here is what lets one popstate handler unwind exactly one
   // level, instead of each component guessing whether a back was meant for it.
@@ -145,8 +149,8 @@ export default function App() {
       </header>
 
       <main className="flex-1 px-4 pt-4 pb-28 sm:pb-8">
-        {tab === 'climb' && <ClimbTab {...props} />}
-        {tab === 'lift' && <LiftTab {...props} />}
+        {tab === 'climb' && <ClimbTab {...props} date={date} onDateChange={setDate} />}
+        {tab === 'lift' && <LiftTab {...props} date={date} onDateChange={setDate} />}
         {tab === 'analysis' && <AnalysisTab {...props} />}
       </main>
 

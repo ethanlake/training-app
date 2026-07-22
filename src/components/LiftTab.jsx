@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { findSession, todayStr, uid, updateToday, pruneEmpty } from '../lib/storage.js'
+import { findSession, todayStr, uid, updateDay, pruneEmpty } from '../lib/storage.js'
 import { Chip, DateHeading, Section } from './ui.jsx'
 import Notes from './Notes.jsx'
 
@@ -17,8 +17,7 @@ export const DEFAULT_EXERCISES = [
 
 const RPE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-export default function LiftTab({ data, update }) {
-  const date = todayStr()
+export default function LiftTab({ data, update, date, onDateChange }) {
   const session = findSession(data, 'lift', date)
   const sets = session?.sets ?? []
 
@@ -68,16 +67,18 @@ export default function LiftTab({ data, update }) {
   const addSet = () => {
     if (!canAdd) return
     update((d) =>
-      updateToday(d, 'lift', (s) => ({
-        ...s,
-        sets: [...s.sets, { id: uid(), exercise, weight: w, reps: r, rpe }],
-      })),
+      updateDay(
+        d,
+        'lift',
+        (s) => ({ ...s, sets: [...s.sets, { id: uid(), exercise, weight: w, reps: r, rpe }] }),
+        date,
+      ),
     )
   }
 
   const removeSet = (id) =>
     update((d) =>
-      pruneEmpty(updateToday(d, 'lift', (s) => ({ ...s, sets: s.sets.filter((x) => x.id !== id) }))),
+      pruneEmpty(updateDay(d, 'lift', (s) => ({ ...s, sets: s.sets.filter((x) => x.id !== id) }), date)),
     )
 
   const grouped = useMemo(() => {
@@ -91,7 +92,7 @@ export default function LiftTab({ data, update }) {
 
   return (
     <div>
-      <DateHeading date={date} />
+      <DateHeading date={date} onChange={onDateChange} />
 
       <Section title="Exercise">
         <div className="flex flex-wrap gap-1.5">
@@ -157,7 +158,7 @@ export default function LiftTab({ data, update }) {
       </Section>
 
       {grouped.length > 0 && (
-        <Section title="Today">
+        <Section title={date === todayStr() ? 'Today' : 'Logged'}>
           <div className="flex flex-col gap-4">
             {grouped.map(([name, list]) => (
               <div key={name}>
@@ -190,7 +191,7 @@ export default function LiftTab({ data, update }) {
 
       <Notes
         value={session?.notes ?? ''}
-        onCommit={(notes) => update((d) => pruneEmpty(updateToday(d, 'lift', (s) => ({ ...s, notes }))))}
+        onCommit={(notes) => update((d) => pruneEmpty(updateDay(d, 'lift', (s) => ({ ...s, notes }), date)))}
       />
     </div>
   )

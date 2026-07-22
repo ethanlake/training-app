@@ -50,6 +50,11 @@ page.on('dialog', async (d) => {
   return d.accept(typeof next === 'string' ? next : undefined)
 })
 
+const todayStr = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const ok = []
 const fail = []
 const check = (name, cond, extra = '') =>
@@ -116,6 +121,65 @@ check('climb notes persisted', climb?.notes === climbNotes, JSON.stringify(climb
 check('3 sets persisted', lift?.sets.length === 3, `got ${lift?.sets.length}`)
 check('set prefill worked', lift?.sets[1].weight === 275 && lift.sets[1].reps === 5)
 check('lift notes persisted', lift?.notes === 'Bar speed good.')
+
+// ---- back-dating -----------------------------------------------------------
+// Tapping the date opens a native picker; picking an older day retargets every
+// write on the tab, so a forgotten session can be filled in after the fact.
+const backDate = await page.evaluate(() => {
+  const d = new Date()
+  d.setDate(d.getDate() - 3)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})
+await page.getByRole('button', { name: 'Climb', exact: true }).first().click()
+await page.waitForTimeout(150)
+const dateInput = page.getByLabel('Change date').first()
+check('date input capped at today', (await dateInput.getAttribute('max')) === todayStr())
+await dateInput.fill(backDate)
+await page.waitForTimeout(200)
+check('back-dated day starts empty', (await page.locator('li button').count()) === 0)
+
+await page.getByRole('button', { name: 'V4', exact: true }).first().click()
+await page.waitForTimeout(200)
+const dated = await page.evaluate(
+  (d) => JSON.parse(localStorage.getItem('training-app/v1')).sessions.find((s) => s.date === d),
+  backDate,
+)
+check('boulder written to the chosen date', dated?.boulders?.length === 1, JSON.stringify(dated?.date))
+check(
+  "today's session untouched by the back-fill",
+  (await page.evaluate(
+    (d) => JSON.parse(localStorage.getItem('training-app/v1')).sessions.find((s) => s.date === d && s.type === 'climb')
+      .boulders.length,
+    todayStr(),
+  )) === 6,
+)
+
+// the date carries across tabs, so one back-fill covers a climb and a lift
+await page.getByRole('button', { name: 'Lift', exact: true }).first().click()
+await page.waitForTimeout(150)
+check(
+  'chosen date carries to the Lift tab',
+  (await page.getByLabel('Change date').first().inputValue()) === backDate,
+)
+
+// and "Today" returns without hunting through the calendar
+await page.getByRole('button', { name: 'Today', exact: true }).click()
+await page.waitForTimeout(200)
+check('Today button resets the date', (await page.getByLabel('Change date').first().inputValue()) === todayStr())
+check('no Today button on today', (await page.getByRole('button', { name: 'Today', exact: true }).count()) === 0)
+
+// a back-dated day must not survive a relaunch as the silent default
+await page.reload({ waitUntil: 'networkidle' })
+check('date resets to today on launch', (await page.getByLabel('Change date').first().inputValue()) === todayStr())
+
+// clean up so later session counts stay predictable
+await page.evaluate((d) => {
+  const KEY = 'training-app/v1'
+  const data = JSON.parse(localStorage.getItem(KEY))
+  data.sessions = data.sessions.filter((s) => s.date !== d)
+  localStorage.setItem(KEY, JSON.stringify(data, null, 2))
+}, backDate)
+await page.reload({ waitUntil: 'networkidle' })
 
 // ---- storage durability ----------------------------------------------------
 // Installed PWAs get persistent storage on request; without asking, Android and

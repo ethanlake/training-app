@@ -145,16 +145,17 @@ export const findSession = (data, type, date) =>
 
 // Returns [data, session] where data may be a new object carrying a freshly
 // created session. At most one session per (type, date).
-export function getOrCreateToday(data, type, date = todayStr()) {
+export function getOrCreateDay(data, type, date = todayStr()) {
   const existing = findSession(data, type, date)
   if (existing) return [data, existing]
   const session = blankSession(type, date)
   return [{ ...data, sessions: [...data.sessions, session] }, session]
 }
 
-// fn receives a shallow copy of today's session and returns the replacement.
-export function updateToday(data, type, fn, date = todayStr()) {
-  const [withSession, session] = getOrCreateToday(data, type, date)
+// fn receives a shallow copy of that day's session and returns the replacement.
+// Defaults to today, but back-filling a forgotten session passes an older date.
+export function updateDay(data, type, fn, date = todayStr()) {
+  const [withSession, session] = getOrCreateDay(data, type, date)
   const next = fn({ ...session })
   return {
     ...withSession,

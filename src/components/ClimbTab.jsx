@@ -7,12 +7,11 @@ import {
   formatBoulder,
   formatSport,
 } from '../lib/grades.js'
-import { findSession, todayStr, uid, updateToday, pruneEmpty } from '../lib/storage.js'
+import { findSession, todayStr, uid, updateDay, pruneEmpty } from '../lib/storage.js'
 import { Chip, DateHeading, Section, SubNav } from './ui.jsx'
 import Notes from './Notes.jsx'
 
-export default function ClimbTab({ data, update }) {
-  const date = todayStr()
+export default function ClimbTab({ data, update, date, onDateChange }) {
   const session = findSession(data, 'climb', date)
   const boulders = session?.boulders ?? []
   const routes = session?.routes ?? []
@@ -23,37 +22,43 @@ export default function ClimbTab({ data, update }) {
   const [mode, setMode] = useState('boulder')
 
   const allTags = [...DEFAULT_BOULDER_TAGS, ...data.customBoulderTags]
+  // "Today" would be a lie while back-filling.
+  const dayLabel = date === todayStr() ? 'Today' : 'Logged'
 
   const toggleTag = (t) =>
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
 
   const addBoulder = (grade) =>
     update((d) =>
-      updateToday(d, 'climb', (s) => ({
-        ...s,
-        boulders: [...s.boulders, { id: uid(), grade, tags: [...tags] }],
-      })),
+      updateDay(
+        d,
+        'climb',
+        (s) => ({ ...s, boulders: [...s.boulders, { id: uid(), grade, tags: [...tags] }] }),
+        date,
+      ),
     )
 
   const removeBoulder = (id) =>
     update((d) =>
       pruneEmpty(
-        updateToday(d, 'climb', (s) => ({ ...s, boulders: s.boulders.filter((b) => b.id !== id) })),
+        updateDay(d, 'climb', (s) => ({ ...s, boulders: s.boulders.filter((b) => b.id !== id) }), date),
       ),
     )
 
   const addRoute = (grade, routeTags) =>
     update((d) =>
-      updateToday(d, 'climb', (s) => ({
-        ...s,
-        routes: [...s.routes, { id: uid(), grade, tags: routeTags }],
-      })),
+      updateDay(
+        d,
+        'climb',
+        (s) => ({ ...s, routes: [...s.routes, { id: uid(), grade, tags: routeTags }] }),
+        date,
+      ),
     )
 
   const removeRoute = (id) =>
     update((d) =>
       pruneEmpty(
-        updateToday(d, 'climb', (s) => ({ ...s, routes: s.routes.filter((r) => r.id !== id) })),
+        updateDay(d, 'climb', (s) => ({ ...s, routes: s.routes.filter((r) => r.id !== id) }), date),
       ),
     )
 
@@ -66,7 +71,7 @@ export default function ClimbTab({ data, update }) {
 
   return (
     <div>
-      <DateHeading date={date} />
+      <DateHeading date={date} onChange={onDateChange} />
 
       <SubNav
         value={mode}
@@ -110,7 +115,7 @@ export default function ClimbTab({ data, update }) {
           </Section>
 
           {boulders.length > 0 && (
-            <Section title="Today">
+            <Section title={dayLabel}>
               <ul className="flex flex-wrap gap-1.5">
                 {boulders.map((b) => (
                   <li key={b.id}>
@@ -139,7 +144,7 @@ export default function ClimbTab({ data, update }) {
           </Section>
 
           {routes.length > 0 && (
-            <Section title="Today">
+            <Section title={dayLabel}>
               <ul className="flex flex-wrap gap-1.5">
                 {routes.map((r) => (
                   <li key={r.id}>
@@ -165,7 +170,7 @@ export default function ClimbTab({ data, update }) {
 
       <Notes
         value={session?.notes ?? ''}
-        onCommit={(notes) => update((d) => pruneEmpty(updateToday(d, 'climb', (s) => ({ ...s, notes }))))}
+        onCommit={(notes) => update((d) => pruneEmpty(updateDay(d, 'climb', (s) => ({ ...s, notes }), date)))}
       />
     </div>
   )

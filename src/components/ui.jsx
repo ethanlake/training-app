@@ -1,5 +1,7 @@
 // Shared shells used by more than one tab.
 
+import { todayStr } from '../lib/storage.js'
+
 export function Section({ title, action, children }) {
   return (
     <section className="mb-8">
@@ -69,11 +71,52 @@ export function Chip({ on, children, ...rest }) {
   )
 }
 
-export function DateHeading({ date }) {
+// Tapping the date opens the platform's own calendar — a transparent native
+// date input sits over the label, which is what makes the phone show its real
+// picker instead of a hand-rolled one. Back-dating is for sessions you forgot
+// to log, so future dates are capped out.
+export function DateHeading({ date, onChange }) {
+  const today = todayStr()
+  const isToday = date === today
   const d = new Date(`${date}T00:00:00`)
+
   return (
-    <p className="mb-4 text-sm text-zinc-500">
-      {d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-    </p>
+    <div className="mb-4 flex items-center gap-3">
+      <span className="relative inline-flex items-center">
+        <span
+          className={`text-sm ${
+            isToday ? 'text-zinc-500' : 'font-medium text-(--color-accent)'
+          }`}
+        >
+          {d.toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
+          })}
+        </span>
+        <input
+          type="date"
+          value={date}
+          max={today}
+          aria-label="Change date"
+          // showPicker() is what opens the calendar on desktop; on phones the
+          // tap alone is enough.
+          onClick={(e) => e.currentTarget.showPicker?.()}
+          onChange={(e) => e.target.value && onChange(e.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </span>
+
+      {/* only offered when it would do something — no dead control on a normal day */}
+      {!isToday && (
+        <button
+          onClick={() => onChange(today)}
+          className="text-sm text-zinc-500 underline underline-offset-4"
+        >
+          Today
+        </button>
+      )}
+    </div>
   )
 }
