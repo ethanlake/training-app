@@ -43,7 +43,6 @@ export default function LiftTab({ data, update, date, onDateChange }) {
   const [reps, setReps] = useState(seed ? String(seed.reps) : '')
   const [rpe, setRpe] = useState(seed?.rpe ?? 7)
 
-  const lastSet = recentSets.find((s) => s.exercise === exercise)
   const perSide = isBarbell(exercise)
 
   const pickExercise = (name) => {
@@ -142,7 +141,6 @@ export default function LiftTab({ data, update, date, onDateChange }) {
               inputMode="decimal"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              placeholder={lastSet ? fieldValue(lastSet) : perSide ? '90' : '135'}
               className="field"
             />
           </label>
@@ -153,7 +151,6 @@ export default function LiftTab({ data, update, date, onDateChange }) {
               inputMode="numeric"
               value={reps}
               onChange={(e) => setReps(e.target.value)}
-              placeholder={lastSet ? String(lastSet.reps) : '5'}
               className="field"
             />
           </label>

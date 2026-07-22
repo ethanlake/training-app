@@ -145,6 +145,12 @@ check(
 await page.getByRole('button', { name: 'pullup', exact: true }).click()
 await page.waitForTimeout(150)
 check('non-barbell field stays plain', (await page.getByRole('spinbutton', { name: 'Weight (lb)' }).count()) === 1)
+// an exercise with no history shows empty boxes, not suggested numbers
+check(
+  'no placeholder numbers on an unlogged exercise',
+  (await page.getByRole('spinbutton', { name: 'Weight (lb)' }).getAttribute('placeholder')) === null &&
+    (await page.getByRole('spinbutton', { name: 'Reps' }).getAttribute('placeholder')) === null,
+)
 check('no total hint for non-barbell', (await page.getByText(/lb total/).count()) === 0)
 await page.getByRole('spinbutton', { name: 'Weight (lb)' }).fill('25')
 await page.getByRole('spinbutton', { name: 'Reps' }).fill('6')
