@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+/* Dark mode is driven by a class on <html>, not the media query directly, so the
+   header toggle can override the system preference. src/lib/theme.js resolves
+   which one wins and sets the class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* single accent, used only for active tab + chart fills — muted enough that a
+     chart full of it still reads as part of a near-monochrome page */
+  --color-accent: oklch(0.55 0.075 250);
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  /* the light-mode accent goes muddy against near-black; lift it */
+  .dark {
+    color-scheme: dark;
+    --color-accent: oklch(0.7 0.09 250);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+    font-family: var(--font-sans);
+    overscroll-behavior-y: none;
+  }
+
+  /* strip spinners from number inputs */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  button {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  /* a tappable chip: >=44px tall, quiet until selected */
+  .chip {
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200
+      px-3 text-sm text-zinc-600 transition-colors select-none
+      dark:border-zinc-800 dark:text-zinc-400;
+  }
+  .chip-on {
+    @apply border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100
+      dark:text-zinc-900;
+  }
+  .field {
+    @apply min-h-11 w-full rounded-lg border border-zinc-200 bg-transparent px-3 text-base
+      text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400
+      dark:border-zinc-800 dark:text-zinc-100 dark:focus:border-zinc-600;
+  }
+  .label {
+    @apply text-xs tracking-wide text-zinc-500 uppercase dark:text-zinc-500;
+  }
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm
+      font-medium text-white transition-opacity active:opacity-70 disabled:opacity-30
+      dark:bg-zinc-100 dark:text-zinc-900;
+  }
+  .btn-quiet {
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-200
+      px-4 text-sm text-zinc-700 active:opacity-70 dark:border-zinc-800 dark:text-zinc-300;
+  }
+}
