@@ -156,6 +156,52 @@ export function prsByReps(sessions, exercise) {
     .sort((a, b) => a.reps - b.reps)
 }
 
+// --- trend series ----------------------------------------------------------
+// One point per day logged, not per week — the point of these is to see every
+// session, so nothing is bucketed. Where a day holds several qualifying sets,
+// the day's best stands for it.
+
+const byDateAsc = (a, b) => a.date.localeCompare(b.date)
+
+export function bodyweightSeries(sessions) {
+  return sessions
+    .filter((s) => s.type === 'lift' && s.bodyweight != null)
+    .map((s) => ({ date: s.date, value: s.bodyweight }))
+    .sort(byDateAsc)
+}
+
+export function maxBoulderSeries(sessions) {
+  return sessions
+    .filter((s) => s.type === 'climb' && (s.boulders?.length ?? 0) > 0)
+    .map((s) => ({ date: s.date, value: Math.max(...s.boulders.map((b) => b.grade)) }))
+    .sort(byDateAsc)
+}
+
+// Heaviest set of this exercise at this rep count on each day it appears.
+// Weight is the stored total, so barbell lifts plot the real load on the bar.
+export function liftSeries(sessions, exercise, reps) {
+  const out = []
+  for (const s of sessions) {
+    if (s.type !== 'lift') continue
+    const matching = (s.sets ?? []).filter((x) => x.exercise === exercise && x.reps === reps)
+    if (matching.length) {
+      out.push({ date: s.date, value: Math.max(...matching.map((x) => x.weight)) })
+    }
+  }
+  return out.sort(byDateAsc)
+}
+
+// Rep counts ever logged for an exercise. Taken over all history rather than
+// the current window so the menu does not reshuffle when the window changes.
+export function repOptions(sessions, exercise) {
+  const reps = new Set()
+  for (const s of sessions) {
+    if (s.type !== 'lift') continue
+    for (const x of s.sets ?? []) if (x.exercise === exercise) reps.add(x.reps)
+  }
+  return [...reps].sort((a, b) => a - b)
+}
+
 // --- summary ---------------------------------------------------------------
 
 // Consecutive weeks, counting back from this one, with at least one session.

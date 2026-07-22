@@ -13,6 +13,7 @@ export const DEFAULT_EXERCISES = [
   'deadlift',
   'bench press',
   'pullup',
+  'block pull',
   'front squat',
   'overhead press',
   'split squats',

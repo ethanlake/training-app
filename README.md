@@ -23,6 +23,17 @@ On iOS an installed app keeps storage separate from Safari's, so install first
 and log second, or the app will look empty. To move data across, export and
 import.
 
+## Trends
+
+The last section of Analysis plots anything against time for the selected
+window: bodyweight, max V grade, or any exercise at a chosen rep count. One
+point per day logged, connected — nothing is averaged into buckets. `+ Add`
+stacks another line on the same plot.
+
+Lines sharing a unit share one axis, so the numbers can be read directly. Mixing
+units (pounds against V grades) has no honest shared axis, so each line is then
+scaled to its own range and the legend carries the numbers.
+
 ## Tags and exercises
 
 The `+` chip adds one. To remove one, **hold it** (or right-click on a desktop)

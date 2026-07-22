@@ -398,6 +398,7 @@ await page.evaluate(() => {
         // a second rep count, deliberately at a constant weight so the best is
         // tied across every week — the PR date must resolve to the earliest
         { id: uid(), exercise: 'deadlift', weight: 185, reps: 10, rpe: 7 },
+        { id: uid(), exercise: 'block pull', weight: 245 + (30 - w) * 2, reps: 5, rpe: 8 },
       ],
       notes: '',
     })
@@ -528,6 +529,73 @@ await page.getByRole('button', { name: 'Week', exact: true }).click()
 await page.waitForTimeout(200)
 const weekBoulders = await readStat('Boulders')
 check('week window narrower than all', Number(weekBoulders) < Number(allBoulders), `week=${weekBoulders}`)
+
+// ---- trends ----------------------------------------------------------------
+// One point per logged day, connected; several series can be stacked, and a
+// mixed-unit stack must refuse to share an axis rather than invent one.
+// the previous block left the window on Week; trends need the full history
+await page.getByRole('button', { name: 'All', exact: true }).click()
+await page.waitForTimeout(250)
+const trendSection = page.locator('section', { has: page.locator('h2', { hasText: 'Trends' }) })
+await trendSection.scrollIntoViewIfNeeded()
+await page.waitForTimeout(200)
+check('trends section exists', (await trendSection.count()) === 1)
+
+const trendMetric = (n) => page.getByLabel(`Trend ${n}`, { exact: true })
+check('block pull offered as a metric', (await trendMetric(1).locator('option', { hasText: 'block pull' }).count()) === 1)
+
+await trendMetric(1).selectOption('lift:deadlift')
+await page.waitForTimeout(300)
+check('reps menu appears for a lift', (await page.getByLabel('Trend 1 reps').count()) === 1)
+const repChoices = await page.getByLabel('Trend 1 reps').locator('option').allInnerTexts()
+check('reps menu lists the logged rep counts', repChoices.join(',') === '5 reps,10 reps', repChoices.join(','))
+
+const dots = () => trendSection.locator('svg circle').count()
+const lines = () => trendSection.locator('svg polyline').count()
+const seeded = await page.evaluate(() =>
+  JSON.parse(localStorage.getItem('training-app/v1'))
+    .sessions.filter((s) => s.type === 'lift' && (s.sets ?? []).some((x) => x.exercise === 'deadlift' && x.reps === 5))
+    .length,
+)
+check('a point per logged day', (await dots()) === seeded, `${await dots()} dots vs ${seeded} days`)
+check('points are connected', (await lines()) === 1, `${await lines()} polylines`)
+check('shared-unit plot keeps an axis', (await trendSection.getByText(/Mixed units/).count()) === 0)
+
+// stack a second lb series: still one axis, twice the marks
+await page.getByRole('button', { name: 'Add trend' }).click()
+await page.waitForTimeout(200)
+await trendMetric(2).selectOption('lift:block pull')
+await page.waitForTimeout(300)
+check('second series plotted', (await lines()) === 2, `${await lines()} polylines`)
+check('two lb series still share one axis', (await trendSection.getByText(/Mixed units/).count()) === 0)
+
+// mixing in V grades must drop the axis rather than pretend the scales agree
+await page.getByRole('button', { name: 'Add trend' }).click()
+await page.waitForTimeout(200)
+await trendMetric(3).selectOption('maxV')
+await page.waitForTimeout(300)
+check('third series plotted', (await lines()) === 3, `${await lines()} polylines`)
+check('mixed units drop the shared axis', (await trendSection.getByText(/Mixed units/).count()) === 1)
+
+// the legend names each series and its range
+const legend = (await trendSection.locator('li').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
+check('legend names each series', legend.length === 3, JSON.stringify(legend))
+check('legend carries ranges', legend.every((l) => l.includes('→')), JSON.stringify(legend))
+check('lift series labelled with its reps', /deadlift · 5 reps/.test(legend[0]), legend[0])
+
+// removing one takes its line with it
+await page.getByRole('button', { name: 'Remove trend 3' }).click()
+await page.waitForTimeout(300)
+check('removing a series drops its line', (await lines()) === 2, `${await lines()} polylines`)
+check('axis returns once units agree again', (await trendSection.getByText(/Mixed units/).count()) === 0)
+
+// trends follow the window selector like everything else
+const allDots = await dots()
+await page.getByRole('button', { name: 'Month', exact: true }).click()
+await page.waitForTimeout(300)
+check('trends respect the time window', (await dots()) < allDots, `month=${await dots()} all=${allDots}`)
+await page.getByRole('button', { name: 'All', exact: true }).click()
+await page.waitForTimeout(300)
 
 // ---- session log & detail --------------------------------------------------
 await page.getByRole('button', { name: 'Log', exact: true }).click()
@@ -737,7 +805,7 @@ const chipOrder = await page
 check(
   'exercise order',
   chipOrder.slice(0, 6).join(',') ===
-    'deadlift,bench press,pullup,front squat,overhead press,split squats',
+    'deadlift,bench press,pullup,block pull,front squat,overhead press',
   chipOrder.join(','),
 )
 

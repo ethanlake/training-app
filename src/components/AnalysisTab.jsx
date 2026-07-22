@@ -3,8 +3,12 @@ import {
   WINDOWS,
   boulderGradeTrend,
   boulderHistogram,
+  bodyweightSeries,
   exercises as exercisesIn,
+  liftSeries,
+  maxBoulderSeries,
   prsByReps,
+  repOptions,
   sessionsPerWeek,
   sportHistogram,
   summary,
@@ -13,9 +17,11 @@ import {
 } from '../lib/stats.js'
 import { formatBoulder } from '../lib/grades.js'
 import { formatWeight } from '../lib/exercises.js'
+import { listChoices } from '../lib/choices.js'
 import { formatDay } from './SessionLog.jsx'
 import BarChart, { Empty } from './charts/BarChart.jsx'
 import LineChart from './charts/LineChart.jsx'
+import TimeChart, { SeriesSwatch } from './charts/TimeChart.jsx'
 import { Section } from './ui.jsx'
 
 export default function AnalysisTab({ data }) {
@@ -112,7 +118,130 @@ export default function AnalysisTab({ data }) {
       <Section title="Tags">
         <TagBars data={tagFrequency(sessions)} />
       </Section>
+
+      <Trends data={data} sessions={sessions} />
     </div>
+  )
+}
+
+let nextTrendId = 1
+
+// Everything plottable against time. Exercises come from the configured list
+// rather than from the data, so the menu does not change shape as the window
+// moves.
+function trendOptions(data) {
+  return [
+    { value: 'bodyweight', label: 'bodyweight' },
+    { value: 'maxV', label: 'max V grade' },
+    ...listChoices(data, 'exercise').map((n) => ({ value: `lift:${n}`, label: n })),
+  ]
+}
+
+const exerciseOf = (metric) => (metric.startsWith('lift:') ? metric.slice(5) : null)
+
+function Trends({ data, sessions }) {
+  const options = trendOptions(data)
+  const [rows, setRows] = useState(() => [{ id: nextTrendId++, metric: 'bodyweight', reps: null }])
+
+  const repsFor = (exercise) => repOptions(data.sessions, exercise)
+
+  const patch = (id, next) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...next } : r)))
+
+  const changeMetric = (id, metric) => {
+    const exercise = exerciseOf(metric)
+    // Landing on a lift needs a rep count; take the one most often logged.
+    patch(id, { metric, reps: exercise ? (repsFor(exercise)[0] ?? null) : null })
+  }
+
+  const add = () =>
+    setRows((rs) => [...rs, { id: nextTrendId++, metric: rs.length ? 'maxV' : 'bodyweight', reps: null }])
+
+  const series = rows.map((r, i) => {
+    const exercise = exerciseOf(r.metric)
+    if (exercise) {
+      return {
+        key: String(r.id),
+        label: `${exercise} · ${r.reps ?? '—'} reps`,
+        unit: 'lb',
+        points: r.reps == null ? [] : liftSeries(sessions, exercise, r.reps),
+      }
+    }
+    if (r.metric === 'maxV') {
+      return {
+        key: String(r.id),
+        label: 'max V grade',
+        unit: 'V',
+        points: maxBoulderSeries(sessions),
+        format: formatBoulder,
+      }
+    }
+    return { key: String(r.id), label: 'bodyweight', unit: 'lb', points: bodyweightSeries(sessions) }
+  })
+
+  const shared = new Set(series.map((s) => s.unit)).size === 1
+  const axisFormat = shared && series[0]?.unit === 'V' ? (v) => formatBoulder(Math.round(v)) : Math.round
+
+  return (
+    <Section title="Trends">
+      <div className="mb-4 flex flex-col gap-2">
+        {rows.map((r, i) => {
+          const exercise = exerciseOf(r.metric)
+          const reps = exercise ? repsFor(exercise) : []
+          return (
+            <div key={r.id} className="flex items-center gap-2">
+              <SeriesSwatch index={i} />
+
+              <select
+                value={r.metric}
+                onChange={(e) => changeMetric(r.id, e.target.value)}
+                aria-label={`Trend ${i + 1}`}
+                className="min-h-11 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-transparent px-2 text-sm dark:border-zinc-800"
+              >
+                {options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+
+              {exercise &&
+                (reps.length ? (
+                  <select
+                    value={r.reps ?? ''}
+                    onChange={(e) => patch(r.id, { reps: Number(e.target.value) })}
+                    aria-label={`Trend ${i + 1} reps`}
+                    className="min-h-11 shrink-0 rounded-lg border border-zinc-200 bg-transparent px-2 text-sm dark:border-zinc-800"
+                  >
+                    {reps.map((n) => (
+                      <option key={n} value={n}>
+                        {n} reps
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="shrink-0 text-xs text-zinc-400">never logged</span>
+                ))}
+
+              {rows.length > 1 && (
+                <button
+                  onClick={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+                  aria-label={`Remove trend ${i + 1}`}
+                  className="min-h-11 shrink-0 px-2 text-zinc-400"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          )
+        })}
+
+        <button onClick={add} className="btn-quiet self-start" aria-label="Add trend">
+          + Add
+        </button>
+      </div>
+
+      <TimeChart series={series} format={axisFormat} />
+    </Section>
   )
 }
 
