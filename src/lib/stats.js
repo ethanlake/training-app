@@ -134,25 +134,26 @@ export function boulderGradeTrend(sessions) {
     }))
 }
 
-export const epley1RM = (weight, reps) => weight * (1 + reps / 30)
-
 export function exercises(sessions) {
   return [...new Set(allSets(sessions).map((s) => s.exercise))].sort()
 }
 
-// Best estimated 1RM per week for one exercise — the honest summary of a week
-// of sets, since volume days would drag an average down.
-export function oneRmTrend(sessions, exercise) {
-  const byWeek = new Map()
+// Heaviest set at each rep count actually logged for this exercise in the
+// window — no fixed rep brackets, since which ones get trained is the user's
+// business. Ties go to the earliest date: a PR is set the first time it is
+// hit, not the last time it is repeated.
+export function prsByReps(sessions, exercise) {
+  const best = new Map()
   for (const s of allSets(sessions)) {
     if (s.exercise !== exercise) continue
-    const k = isoDay(weekStart(parseDate(s.date)))
-    const est = epley1RM(s.weight, s.reps)
-    byWeek.set(k, Math.max(byWeek.get(k) ?? 0, est))
+    const cur = best.get(s.reps)
+    if (!cur || s.weight > cur.weight || (s.weight === cur.weight && s.date < cur.date)) {
+      best.set(s.reps, { weight: s.weight, date: s.date })
+    }
   }
-  return [...byWeek.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([k, value]) => ({ label: shortDate(parseDate(k)), value: Math.round(value) }))
+  return [...best.entries()]
+    .map(([reps, v]) => ({ reps, ...v }))
+    .sort((a, b) => a.reps - b.reps)
 }
 
 // --- summary ---------------------------------------------------------------

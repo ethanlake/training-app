@@ -4,7 +4,7 @@ import {
   boulderGradeTrend,
   boulderHistogram,
   exercises as exercisesIn,
-  oneRmTrend,
+  prsByReps,
   sessionsPerWeek,
   sportHistogram,
   summary,
@@ -12,7 +12,8 @@ import {
   windowSessions,
 } from '../lib/stats.js'
 import { formatBoulder } from '../lib/grades.js'
-import { isBarbell } from '../lib/exercises.js'
+import { formatWeight } from '../lib/exercises.js'
+import { formatDay } from './SessionLog.jsx'
 import BarChart, { Empty } from './charts/BarChart.jsx'
 import LineChart from './charts/LineChart.jsx'
 import { Section } from './ui.jsx'
@@ -87,12 +88,13 @@ export default function AnalysisTab({ data }) {
       </Section>
 
       <Section
-        title="Estimated 1RM"
+        title="PRs"
         action={
-          liftNames.length > 1 && (
+          liftNames.length > 0 && (
             <select
               value={activeExercise}
               onChange={(e) => setExercise(e.target.value)}
+              aria-label="PR exercise"
               className="min-h-9 rounded-lg border border-zinc-200 bg-transparent px-2 text-sm dark:border-zinc-800"
             >
               {liftNames.map((n) => (
@@ -104,19 +106,7 @@ export default function AnalysisTab({ data }) {
           )
         }
       >
-        {activeExercise ? (
-          <>
-            {/* 1RM is a derived total, never per-side — say so, or a barbell
-                number here reads as plates on one end. */}
-            <p className="mb-2 text-sm text-zinc-500">
-              {activeExercise}
-              {isBarbell(activeExercise) && ' · total on the bar'}
-            </p>
-            <OneRm sessions={sessions} exercise={activeExercise} />
-          </>
-        ) : (
-          <Empty />
-        )}
+        {activeExercise ? <Prs sessions={sessions} exercise={activeExercise} /> : <Empty />}
       </Section>
 
       <Section title="Tags">
@@ -126,10 +116,29 @@ export default function AnalysisTab({ data }) {
   )
 }
 
-function OneRm({ sessions, exercise }) {
-  const trend = oneRmTrend(sessions, exercise)
-  if (trend.length < 2) return <Empty>Needs two weeks of data</Empty>
-  return <LineChart data={trend} series={[{ key: 'value', label: 'est. 1RM' }]} format={(v) => `${v}`} />
+// The heaviest set at each rep count logged in the window, with the day it was
+// set. Barbell weights read per-side with the total alongside, as everywhere else.
+function Prs({ sessions, exercise }) {
+  const prs = prsByReps(sessions, exercise)
+  if (!prs.length) return <Empty>Nothing logged in this window</Empty>
+  return (
+    <ul className="flex flex-col">
+      {prs.map((p) => (
+        <li
+          key={p.reps}
+          className="flex items-baseline gap-3 border-b border-zinc-100 py-2.5 last:border-0 dark:border-zinc-900"
+        >
+          <span className="w-16 shrink-0 text-sm text-zinc-500 tabular-nums">
+            {p.reps} {p.reps === 1 ? 'rep' : 'reps'}
+          </span>
+          <span className="flex-1 font-medium tabular-nums">
+            {formatWeight(exercise, p.weight)}
+          </span>
+          <span className="shrink-0 text-sm text-zinc-500 tabular-nums">{formatDay(p.date)}</span>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 // A horizontal ranked list reads better than bars for a long tail of tags.

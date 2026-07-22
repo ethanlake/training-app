@@ -358,6 +358,9 @@ await page.evaluate(() => {
       sets: [
         { id: uid(), exercise: 'deadlift', weight: 205 + (30 - w) * 2, reps: 5, rpe: 8 },
         { id: uid(), exercise: 'bench press', weight: 135 + (30 - w), reps: 5, rpe: 7 },
+        // a second rep count, deliberately at a constant weight so the best is
+        // tied across every week — the PR date must resolve to the earliest
+        { id: uid(), exercise: 'deadlift', weight: 185, reps: 10, rpe: 7 },
       ],
       notes: '',
     })
@@ -381,7 +384,7 @@ const allBoulders = await readStat('Boulders')
 check('window switch changes stats', Number(allBoulders) > Number(monthBoulders), `month=${monthBoulders} all=${allBoulders}`)
 check('streak computed', Number(await readStat('Week streak')) > 1, await readStat('Week streak'))
 check('hardest grade shown', /^V\d+$/.test(await readStat('Hardest')), await readStat('Hardest'))
-// volume and 1RM must be computed from true totals, never per-side entries
+// volume must be computed from true totals, never per-side entries
 const volume = Number((await readStat('Volume \\(lb\\)')).replace(/,/g, ''))
 const expectedVolume = await page.evaluate(() =>
   JSON.parse(localStorage.getItem('training-app/v1'))
@@ -393,6 +396,95 @@ check('volume uses the total on the bar', volume === expectedVolume, `${volume} 
 
 const bars = await page.locator('svg polyline').count()
 check('line charts rendered', bars >= 2, `${bars} polylines`)
+
+// ---- PRs -------------------------------------------------------------------
+// Heaviest set at each rep count actually logged, with the date it was set.
+check('1RM section is gone', (await page.getByText(/1RM/i).count()) === 0)
+const prSelect = page.getByLabel('PR exercise')
+check('PR exercise menu offered', (await prSelect.count()) === 1)
+await prSelect.selectOption('deadlift')
+await page.waitForTimeout(200)
+
+const prRows = page.locator('section', { has: page.locator('h2', { hasText: 'PRs' }) }).locator('li')
+const prText = (await prRows.allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
+check('a PR row per rep count logged', prText.length >= 1, JSON.stringify(prText))
+
+// the seeded history is deadlift 5s only, plus today's 275; the all-time best
+// is the oldest week's 263... so verify against the data rather than a constant
+const expected = await page.evaluate(() => {
+  const sets = JSON.parse(localStorage.getItem('training-app/v1'))
+    .sessions.filter((s) => s.type === 'lift')
+    .flatMap((s) => (s.sets ?? []).map((x) => ({ ...x, date: s.date })))
+    .filter((x) => x.exercise === 'deadlift')
+  const best = new Map()
+  for (const x of sets) {
+    const cur = best.get(x.reps)
+    if (!cur || x.weight > cur.weight || (x.weight === cur.weight && x.date < cur.date)) {
+      best.set(x.reps, { weight: x.weight, date: x.date })
+    }
+  }
+  return [...best.entries()].map(([reps, v]) => ({ reps, ...v })).sort((a, b) => a.reps - b.reps)
+})
+check(
+  'one row per unique rep value',
+  prText.length === expected.length,
+  `${prText.length} rows vs ${expected.length} rep values`,
+)
+check(
+  'PR shows the heaviest weight per side with the total',
+  prText[0].includes(`${(expected[0].weight - 45) / 2} (${expected[0].weight} tot)`),
+  prText[0],
+)
+check('PR row names the reps', prText[0].startsWith(`${expected[0].reps} rep`), prText[0])
+check(
+  'PR row carries a date',
+  /[A-Z][a-z]{2} \d{1,2}, \d{2}/.test(prText[0]),
+  prText[0],
+)
+
+// the real shape: two rep counts, heavier weight for the lower reps
+check('a row for each of the two rep counts', prText.length === 2, JSON.stringify(prText))
+check(
+  'rows ordered by reps',
+  /^5 rep/.test(prText[0]) && /^10 rep/.test(prText[1]),
+  JSON.stringify(prText),
+)
+check(
+  '10-rep PR lighter than the 5-rep PR',
+  expected[1].weight < expected[0].weight,
+  `${expected[1].weight} vs ${expected[0].weight}`,
+)
+check('10-rep PR reads per side', prText[1].includes('70 (185 tot)'), prText[1])
+
+// tie-break: that weight was hit every week, so the PR belongs to the first time
+const tie = await page.evaluate(() => {
+  const dates = JSON.parse(localStorage.getItem('training-app/v1'))
+    .sessions.filter((s) => s.type === 'lift')
+    .flatMap((s) =>
+      (s.sets ?? []).filter((x) => x.exercise === 'deadlift' && x.reps === 10).map(() => s.date),
+    )
+    .sort()
+  const label = (d) =>
+    new Date(`${d}T00:00:00`).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: '2-digit',
+    })
+  return { earliest: label(dates[0]), latest: label(dates[dates.length - 1]), n: dates.length }
+})
+check(
+  'tie goes to the earliest date, not the latest',
+  tie.n > 1 && prText[1].includes(tie.earliest) && !prText[1].includes(tie.latest),
+  `${prText[1]} | earliest ${tie.earliest}, latest ${tie.latest}`,
+)
+
+// a narrower window must be able to show a different (or no) PR
+await page.getByRole('button', { name: 'Week', exact: true }).click()
+await page.waitForTimeout(250)
+const weekRows = (await prRows.allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
+check('PRs respect the time window', weekRows.length <= prText.length, `week=${weekRows.length} all=${prText.length}`)
+await page.getByRole('button', { name: 'All', exact: true }).click()
+await page.waitForTimeout(200)
 await page.screenshot({ path: `${SHOTS}/desktop-analysis-all.png`, fullPage: true })
 
 await page.getByRole('button', { name: 'Week', exact: true }).click()

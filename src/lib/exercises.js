@@ -3,7 +3,7 @@
 //
 // Barbell lifts are logged the way they are loaded: the weight on ONE end of the
 // bar. What gets stored is always the true total (2 × per-side + bar), because
-// `weight` feeds estimated 1RM and volume in stats.js — storing a per-side
+// `weight` feeds PRs and total volume in stats.js — storing a per-side
 // number there would quietly halve every strength figure. Per-side is a display
 // and input concern, derived on the way in and out.
 
